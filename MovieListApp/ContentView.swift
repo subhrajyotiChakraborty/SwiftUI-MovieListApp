@@ -19,6 +19,7 @@ struct ContentView: View {
     @State private var isEditing = false
     
     func loadData(searchKey:String="", isOnAppear: Bool=true) {
+        print("call")
         
         let movieName = searchKey.trimmingCharacters(in: .whitespacesAndNewlines)
         
@@ -70,67 +71,93 @@ struct ContentView: View {
     }
     
     var body: some View {
-        TabView {
-            VStack {
-                HStack {
-                    
-                    TextField("Search ...", text: $searchText) {    isEditing in
-                        self.isEditing = isEditing
-                    } onCommit: {
-                        loadData(searchKey: self.searchText, isOnAppear: false)
-                    }
-                    .padding(7)
-                    .padding(.horizontal, 25)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(8)
-                    .overlay(
-                        HStack {
-                            Image(systemName: "magnifyingglass")
-                                .foregroundColor(.gray)
-                                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                                .padding(.leading, 8)
-                            
-                            if isEditing {
-                                Button(action: {
+        NavigationView {
+            TabView {
+                VStack {
+                    HStack {
+                        
+                        TextField("Search ...", text: $searchText) {    isEditing in
+                            self.isEditing = isEditing
+                        } onCommit: {
+                            loadData(searchKey: self.searchText, isOnAppear: false)
+                        }
+                        .padding(7)
+                        .padding(.horizontal, 25)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(8)
+                        .overlay(
+                            HStack {
+                                Image(systemName: "magnifyingglass")
+                                    .foregroundColor(.gray)
+                                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                                    .padding(.leading, 8)
+                                
+                                if isEditing {
+                                    Button(action: {
+                                        self.searchText = ""
+                                    }) {
+                                        Image(systemName: "multiply.circle.fill")
+                                            .foregroundColor(.gray)
+                                            .padding(.trailing, 8)
+                                    }
+                                }
+                                
+                            }
+                        )
+                        .padding(.horizontal, 10)
+                        
+                        if isEditing {
+                            withAnimation {
+                                return                         Button(action: {
+                                    self.isEditing = false
                                     self.searchText = ""
+                                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                                    
                                 }) {
-                                    Image(systemName: "multiply.circle.fill")
-                                        .foregroundColor(.gray)
-                                        .padding(.trailing, 8)
+                                    Text("Cancel")
+                                }
+                                .padding(.trailing, 10)
+                                .transition(.move(edge: .trailing))
+                                .animation(.default)
+                            }
+                        }
+                    }
+                    
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 20) {
+                            ForEach(results, id: \.imdbID) {movie in
+                                NavigationLink(destination: DetailView()) {
+                                    ZStack {
+                                        Image(uiImage: movie.Poster.load())
+                                            .resizable()
+                                            .scaledToFill()
+                                    }
+                                    .frame(width: 180, height: 300)
+                                    .clipShape(Rectangle())
+                                    .border(Color.white, width: 1)
                                 }
                             }
-                            
                         }
-                    )
-                    .padding(.horizontal, 10)
-                    
-                    if isEditing {
-                        withAnimation {
-                            return                         Button(action: {
-                                self.isEditing = false
-                                self.searchText = ""
-                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                                
-                            }) {
-                                Text("Cancel")
-                            }
-                            .padding(.trailing, 10)
-                            .transition(.move(edge: .trailing))
-                            .animation(.default)
-                        }
+                        .padding(.horizontal)
                     }
+                    .padding(.vertical)
                 }
+                .tabItem {
+                    Image(systemName: "list.dash")
+                    Text("Movies")
+                }
+                .onAppear(perform: {
+                    loadData(searchKey: "", isOnAppear: true)
+                })
                 
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 20) {
-                        ForEach(results, id: \.imdbID) {movie in
-                            Button(action: /*@START_MENU_TOKEN@*/{}/*@END_MENU_TOKEN@*/, label: {
-                                ZStack {
-                                    Image(uiImage: movie.Poster.load())
-                                        .resizable()
-                                        .scaledToFill()
-                                }
-                            })
+                        ForEach(favResults, id: \.imdbID) {movie in
+                            ZStack {
+                                Image(uiImage: movie.Poster.load())
+                                    .resizable()
+                                    .scaledToFill()
+                            }
                             .frame(width: 180, height: 300)
                             .clipShape(Rectangle())
                             .border(Color.white, width: 1)
@@ -138,37 +165,15 @@ struct ContentView: View {
                     }
                     .padding(.horizontal)
                 }
-            }
-            .tabItem {
-                Image(systemName: "list.dash")
-                Text("Movies")
-            }
-            .onAppear(perform: {
-                loadData(searchKey: "", isOnAppear: true)
-            })
-            
-            ScrollView {
-                LazyVGrid(columns: columns, spacing: 20) {
-                    ForEach(favResults, id: \.imdbID) {movie in
-                        ZStack {
-                            Image(uiImage: movie.Poster.load())
-                                .resizable()
-                                .scaledToFill()
-                        }
-                        .frame(width: 180, height: 300)
-                        .clipShape(Rectangle())
-                        .border(Color.white, width: 1)
-                    }
+                .tabItem {
+                    Image(systemName: "heart.fill")
+                    Text("Favorits")
                 }
-                .padding(.horizontal)
+                .onAppear(perform: {
+                    loadFavMovies()
+                })
             }
-            .tabItem {
-                Image(systemName: "heart.fill")
-                Text("Favorits")
-            }
-            .onAppear(perform: {
-                loadFavMovies()
-            })
+            .navigationBarTitle("MovieList")
         }
     }
 }
@@ -207,4 +212,35 @@ struct Movies: Codable {
 
 struct FavMovies: Codable {
     let movies: [Movie]
+}
+
+struct DetailView: View {
+    var body: some View {
+        GeometryReader { fullView in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ZStack {
+                        Image(uiImage: "https://m.media-amazon.com/images/M/MV5BNjM0NTc0NzItM2FlYS00YzEwLWE0YmUtNTA2ZWIzODc2OTgxXkEyXkFqcGdeQXVyNTgwNzIyNzg@._V1_SX300.jpg".load())
+                            .resizable()
+                            .frame(width: fullView.size.width, height: 500)
+                            .scaledToFit()
+                    }
+                    Group {
+                        Text("The Guardians struggle to keep together as a team while dealing with their personal family issues, notably Star-Lord's encounter with his father the ambitious celestial being Ego.")
+                            .padding(.vertical)
+                        
+                        Text("Director")
+                            .font(.headline)
+                        
+                        Text("James Gunn")
+                            .padding(.vertical)
+                        
+                    }
+                    .padding(.horizontal)
+                    
+                }
+            }
+        }
+        .navigationBarTitle(Text("Guardians of the Galaxy Vol. 2"), displayMode: .inline)
+    }
 }
