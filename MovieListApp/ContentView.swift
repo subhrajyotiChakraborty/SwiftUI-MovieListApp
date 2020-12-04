@@ -16,17 +16,19 @@ struct ContentView: View {
     @State private var searchText: String = ""
     @State private var results = [Movie]()
     @State private var favResults = [Movie]()
+    @State private var isEditing = false
     
-    func loadData(searchKey:String="Jurassic", isOnAppear: Bool=true) {
+    func loadData(searchKey:String="", isOnAppear: Bool=true) {
         
         let movieName = searchKey.trimmingCharacters(in: .whitespacesAndNewlines)
         
-//        if (isOnAppear && movieName.count != 0) {
-//            return
-//        }
+        if (isOnAppear && searchText.trimmingCharacters(in: .whitespacesAndNewlines).count != 0) {
+            return
+        }
         
         var movieURL: String = ""
-        movieURL = "https://flask-movie-app.herokuapp.com/movie/\(movieName)"
+        movieURL = "https://flask-movie-app.herokuapp.com/movie/\(movieName.count != 0 ? movieName : "Jurassic")"
+        movieURL = movieURL.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
         
         guard let url = URL(string: movieURL) else {
             print("Invalid URL")
@@ -70,31 +72,65 @@ struct ContentView: View {
     var body: some View {
         TabView {
             VStack {
-                TextField("Search...", text: $searchText) { isEditing in
-                    print("is onEditChange \(isEditing)")
-                } onCommit: {
-                    print("Enter pressed!")
-                    loadData(searchKey: self.searchText, isOnAppear: false)
+                HStack {
+                    
+                    TextField("Search ...", text: $searchText) {    isEditing in
+                        self.isEditing = isEditing
+                    } onCommit: {
+                        loadData(searchKey: self.searchText, isOnAppear: false)
+                    }
+                    .padding(7)
+                    .padding(.horizontal, 25)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+                    .overlay(
+                        HStack {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(.gray)
+                                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                                .padding(.leading, 8)
+                            
+                            if isEditing {
+                                Button(action: {
+                                    self.searchText = ""
+                                }) {
+                                    Image(systemName: "multiply.circle.fill")
+                                        .foregroundColor(.gray)
+                                        .padding(.trailing, 8)
+                                }
+                            }
+                            
+                        }
+                    )
+                    .padding(.horizontal, 10)
+                    
+                    if isEditing {
+                        withAnimation {
+                            return                         Button(action: {
+                                self.isEditing = false
+                                self.searchText = ""
+                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                                
+                            }) {
+                                Text("Cancel")
+                            }
+                            .padding(.trailing, 10)
+                            .transition(.move(edge: .trailing))
+                            .animation(.default)
+                        }
+                    }
                 }
-
+                
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 20) {
                         ForEach(results, id: \.imdbID) {movie in
-                            ZStack(alignment: .topTrailing) {
-                                Image(uiImage: movie.Poster.load())
-                                    .resizable()
-                                    .scaledToFill()
-                                Image(systemName: "heart")
-                                    .font(.caption)
-                                    .foregroundColor(.red)
-                                    .padding()
-                                    .background(Color.black.opacity(0.75))
-                                    .clipShape(Circle())
-                                    .offset(x: -0, y: -0)
-                                    .onTapGesture {
-                                        print("Fav tapped!!")
-                                    }
-                            }
+                            Button(action: /*@START_MENU_TOKEN@*/{}/*@END_MENU_TOKEN@*/, label: {
+                                ZStack {
+                                    Image(uiImage: movie.Poster.load())
+                                        .resizable()
+                                        .scaledToFill()
+                                }
+                            })
                             .frame(width: 180, height: 300)
                             .clipShape(Rectangle())
                             .border(Color.white, width: 1)
@@ -108,26 +144,16 @@ struct ContentView: View {
                 Text("Movies")
             }
             .onAppear(perform: {
-                loadData()
+                loadData(searchKey: "", isOnAppear: true)
             })
             
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 20) {
                     ForEach(favResults, id: \.imdbID) {movie in
-                        ZStack(alignment: .topTrailing) {
+                        ZStack {
                             Image(uiImage: movie.Poster.load())
                                 .resizable()
                                 .scaledToFill()
-                            Image(systemName: "heart.fill")
-                                .font(.caption)
-                                .foregroundColor(.red)
-                                .padding()
-                                .background(Color.black.opacity(0.75))
-                                .clipShape(Circle())
-                                .offset(x: -0, y: -0)
-                                .onTapGesture {
-                                    print("Fav tapped!!")
-                                }
                         }
                         .frame(width: 180, height: 300)
                         .clipShape(Rectangle())
