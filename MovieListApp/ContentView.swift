@@ -17,9 +17,10 @@ struct ContentView: View {
     @State private var results = [Movie]()
     @State private var favResults = [Movie]()
     @State private var isEditing = false
+    @State private var showDetailView = false
+    @State private var selectedMovie = Movie(Title: "", Year: "", imdbID: "", Poster: "", isFav: false)
     
     func loadData(searchKey:String="", isOnAppear: Bool=true) {
-        print("call")
         
         let movieName = searchKey.trimmingCharacters(in: .whitespacesAndNewlines)
         
@@ -28,7 +29,7 @@ struct ContentView: View {
         }
         
         var movieURL: String = ""
-        movieURL = "https://flask-movie-app.herokuapp.com/movie/\(movieName.count != 0 ? movieName : "Jurassic")"
+        movieURL = "https://flask-movie-app.herokuapp.com/movies/\(movieName.count != 0 ? movieName : "Jurassic")"
         movieURL = movieURL.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
         
         guard let url = URL(string: movieURL) else {
@@ -126,7 +127,10 @@ struct ContentView: View {
                     ScrollView {
                         LazyVGrid(columns: columns, spacing: 20) {
                             ForEach(results, id: \.imdbID) {movie in
-                                NavigationLink(destination: DetailView()) {
+                                Button(action: {
+                                    self.selectedMovie = movie
+                                    self.showDetailView = true
+                                }, label: {
                                     ZStack {
                                         Image(uiImage: movie.Poster.load())
                                             .resizable()
@@ -135,13 +139,16 @@ struct ContentView: View {
                                     .frame(width: 180, height: 300)
                                     .clipShape(Rectangle())
                                     .border(Color.white, width: 1)
-                                }
+                                })
                             }
                         }
                         .padding(.horizontal)
                     }
                     .padding(.vertical)
                 }
+                .sheet(isPresented: $showDetailView, content: {
+                    DetailView(imdbId: selectedMovie.imdbID, movieTitle: selectedMovie.Title)
+                })
                 .tabItem {
                     Image(systemName: "list.dash")
                     Text("Movies")
@@ -206,6 +213,29 @@ struct Movie: Codable {
     let isFav: Bool?
 }
 
+struct MovieDetails: Codable {
+    let Title: String
+    let Plot: String
+    let Year: String
+    let imdbID: String
+    let Poster: String
+    let Rated: String
+    let Released: String
+    let Runtime: String
+    let Genre: String
+    let Director: String
+    let Writer: String
+    let Actors: String
+    let Language: String
+    let Country: String
+    let Awards: String
+    let Metascore: String
+    let imdbRating: String
+    let imdbVotes: String
+    let Production: String
+    let Website: String
+}
+
 struct Movies: Codable {
     let Search: [Movie]
 }
@@ -215,32 +245,83 @@ struct FavMovies: Codable {
 }
 
 struct DetailView: View {
-    var body: some View {
-        GeometryReader { fullView in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    ZStack {
-                        Image(uiImage: "https://m.media-amazon.com/images/M/MV5BNjM0NTc0NzItM2FlYS00YzEwLWE0YmUtNTA2ZWIzODc2OTgxXkEyXkFqcGdeQXVyNTgwNzIyNzg@._V1_SX300.jpg".load())
-                            .resizable()
-                            .frame(width: fullView.size.width, height: 500)
-                            .scaledToFit()
+    
+    @Environment(\.presentationMode) var presentationMode
+    @State private var isLoading = true
+    @State private var movieDetailsData = MovieDetails(Title: "", Plot: "", Year: "", imdbID: "", Poster: "", Rated: "", Released: "", Runtime: "", Genre: "", Director: "", Writer: "", Actors: "", Language: "", Country: "", Awards: "", Metascore: "", imdbRating: "", imdbVotes: "", Production: "", Website: "")
+    var imdbId: String
+    var movieTitle: String
+    
+    func loadMovieDetail() {
+        let movieDetailsURL = "https://flask-movie-app.herokuapp.com/movie/\(imdbId)"
+        print(movieDetailsURL)
+        
+        guard let url = URL(string: movieDetailsURL) else {
+            self.isLoading = false
+            return
+        }
+        let request = URLRequest(url: url)
+        
+        URLSession.shared.dataTask(with: request) { (data, response, error) in
+            if let data = data {
+                if let decodedData = try? JSONDecoder().decode(MovieDetails.self, from: data) {
+                    DispatchQueue.main.async {
+                        self.movieDetailsData = decodedData
+                        self.isLoading = false
                     }
-                    Group {
-                        Text("The Guardians struggle to keep together as a team while dealing with their personal family issues, notably Star-Lord's encounter with his father the ambitious celestial being Ego.")
-                            .padding(.vertical)
-                        
-                        Text("Director")
-                            .font(.headline)
-                        
-                        Text("James Gunn")
-                            .padding(.vertical)
-                        
-                    }
-                    .padding(.horizontal)
-                    
+                    return
                 }
             }
+            self.isLoading = false
+            print("Fetch details: \(error?.localizedDescription ?? "Unknown error")")
+        }.resume()
+    }
+    
+    var body: some View {
+        
+        NavigationView {
+            GeometryReader { fullView in
+                ScrollView {
+                    if isLoading {
+                        ProgressView("Loading...")
+                            .frame(width: fullView.size.width, height: fullView.size.height, alignment: .center)
+                    } else {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ZStack {
+                                Image(uiImage: movieDetailsData.Poster.load())
+                                    .resizable()
+                                    .frame(width: fullView.size.width, height: 500)
+                                    .scaledToFit()
+                            }
+                            Group {
+                                Text(movieDetailsData.Plot)
+                                    .padding(.vertical)
+                                Section {
+                                    Text("Director")
+                                        .font(.headline)
+                                    Text(movieDetailsData.Director)
+                                        .padding(.vertical)
+                                }
+                                
+                            }
+                            .padding(.horizontal)
+                            
+                        }
+                    }
+                }
+            }
+            .navigationBarItems(leading: Button(action: {
+                self.presentationMode.wrappedValue.dismiss()
+            }, label: {
+                Image(systemName: "chevron.left")
+            }))
+            .navigationBarTitle(Text(self.movieTitle), displayMode: .inline)
+            .onAppear(perform: {
+                self.isLoading = true
+                self.loadMovieDetail()
+            })
         }
-        .navigationBarTitle(Text("Guardians of the Galaxy Vol. 2"), displayMode: .inline)
     }
 }
+
+
