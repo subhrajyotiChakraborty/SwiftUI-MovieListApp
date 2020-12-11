@@ -19,6 +19,7 @@ struct ContentView: View {
     @State private var isEditing = false
     @State private var showDetailView = false
     @State private var selectedMovie = Movie(Title: "", Year: "", imdbID: "", Poster: "", isFav: false)
+    @State private var isInitialViewLoad = false
     
     func loadData(searchKey:String="", isOnAppear: Bool=true) {
         
@@ -43,6 +44,7 @@ struct ContentView: View {
                 if let decodedResponse = try? JSONDecoder().decode(Movies.self, from: data) {
                     DispatchQueue.main.async {
                         self.results = decodedResponse.Search
+                        self.isInitialViewLoad = true
                     }
                     return
                 }
@@ -147,27 +149,36 @@ struct ContentView: View {
                     .padding(.vertical)
                 }
                 .sheet(isPresented: $showDetailView, content: {
-                    DetailView(imdbId: selectedMovie.imdbID, movieTitle: selectedMovie.Title)
+                    DetailView(imdbId: $selectedMovie.imdbID, movieTitle: $selectedMovie.Title, isFav: $selectedMovie.isFav)
                 })
                 .tabItem {
                     Image(systemName: "list.dash")
                     Text("Movies")
                 }
                 .onAppear(perform: {
+                    if isInitialViewLoad {
+                        print("condition")
+                        return
+                    }
                     loadData(searchKey: "", isOnAppear: true)
                 })
                 
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 20) {
                         ForEach(favResults, id: \.imdbID) {movie in
-                            ZStack {
-                                Image(uiImage: movie.Poster.load())
-                                    .resizable()
-                                    .scaledToFill()
-                            }
-                            .frame(width: 180, height: 300)
-                            .clipShape(Rectangle())
-                            .border(Color.white, width: 1)
+                            Button(action: {
+                                self.selectedMovie = movie
+                                self.showDetailView = true
+                            }, label: {
+                                ZStack {
+                                    Image(uiImage: movie.Poster.load())
+                                        .resizable()
+                                        .scaledToFill()
+                                }
+                                .frame(width: 180, height: 300)
+                                .clipShape(Rectangle())
+                                .border(Color.white, width: 1)
+                            })
                         }
                     }
                     .padding(.horizontal)
@@ -206,11 +217,11 @@ extension String {
 }
 
 struct Movie: Codable {
-    let Title: String
+    var Title: String
     let Year: String
-    let imdbID: String
+    var imdbID: String
     let Poster: String
-    let isFav: Bool?
+    var isFav: Bool?
 }
 
 struct MovieDetails: Codable {
@@ -244,13 +255,18 @@ struct FavMovies: Codable {
     let movies: [Movie]
 }
 
+struct DeleteMovieResponse: Codable {
+    let message: String
+}
+
 struct DetailView: View {
     
     @Environment(\.presentationMode) var presentationMode
     @State private var isLoading = true
     @State private var movieDetailsData = MovieDetails(Title: "", Plot: "", Year: "", imdbID: "", Poster: "", Rated: "", Released: "", Runtime: "", Genre: "", Director: "", Writer: "", Actors: "", Language: "", Country: "", Awards: "", Metascore: "", imdbRating: "", imdbVotes: "", Production: "", Website: "")
-    var imdbId: String
-    var movieTitle: String
+    @Binding var imdbId: String
+    @Binding var movieTitle: String
+    @Binding var isFav: Bool?
     
     func loadMovieDetail() {
         let movieDetailsURL = "https://flask-movie-app.herokuapp.com/movie/\(imdbId)"
@@ -274,6 +290,40 @@ struct DetailView: View {
             }
             self.isLoading = false
             print("Fetch details: \(error?.localizedDescription ?? "Unknown error")")
+        }.resume()
+    }
+    
+    func addToFavorites(movie: Movie) {
+        guard let encoded = try? JSONEncoder().encode(movie) else {
+            print("Unable to encode movie data")
+            return
+        }
+        
+        let url = URL(string: "https://flask-movie-app.herokuapp.com/movie")!
+        
+        var request = URLRequest(url: url)
+        
+        //        let body: [String: String] = ["Title": movie.Title, "Poster": movie.Poster, "imdbID": movie.imdbID, "Year": movie.Year]
+        //
+        //        let finalBody = try! JSONSerialization.data(withJSONObject: body)
+        
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpMethod = "POST"
+        
+        // request.httpBody = finalBody
+        request.httpBody = encoded
+        
+        URLSession.shared.dataTask(with: request) { (data, response, error) in
+            if let data = data {
+                if let decodedData = try? JSONDecoder().decode(Movie.self, from: data) {
+                    print("Successfully added to fav list!!")
+                    return
+                } else {
+                    print("Invalid response from server")
+                    return
+                }
+            }
+            print("Error => \(error?.localizedDescription ?? "Unknown error")")
         }.resume()
     }
     
@@ -301,6 +351,19 @@ struct DetailView: View {
                                         .font(.headline)
                                     Text(movieDetailsData.Director)
                                         .padding(.vertical)
+                                }
+                                Section {
+                                    Button(action: {
+                                        if let _ = isFav {
+                                            // remove from fav
+                                        } else {
+                                            let movieData = Movie(Title: movieDetailsData.Title, Year: movieDetailsData.Year, imdbID: movieDetailsData.imdbID, Poster: movieDetailsData.Poster, isFav: false)
+                                            addToFavorites(movie: movieData)
+                                        }
+                                    }, label: {
+                                        Image(systemName: isFav ?? false ? "minus.circle" : "plus.circle")
+                                        Text(isFav ?? false ? "Remove from favorites" : "Add to favorites")
+                                    })
                                 }
                                 
                             }
