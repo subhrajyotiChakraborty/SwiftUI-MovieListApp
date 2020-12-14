@@ -20,6 +20,7 @@ struct ContentView: View {
     @State private var showDetailView = false
     @State private var selectedMovie = Movie(Title: "", Year: "", imdbID: "", Poster: "", isFav: false)
     @State private var isInitialViewLoad = false
+    @ObservedObject var favMoviesList = FavMoviesObservable()
     
     func loadData(searchKey:String="", isOnAppear: Bool=true) {
         
@@ -53,25 +54,29 @@ struct ContentView: View {
         }.resume()
     }
     
-    func loadFavMovies() {
-        guard let url = URL(string: "https://flask-movie-app.herokuapp.com/favorites") else {
-            print("Invalid URL")
-            return
-        }
-        
-        let request = URLRequest(url: url)
-        URLSession.shared.dataTask(with: request) { (data, response, error) in
-            if let data = data {
-                if let decodedResponse = try? JSONDecoder().decode(FavMovies.self, from: data) {
-                    DispatchQueue.main.async {
-                        self.favResults = decodedResponse.movies
-                    }
-                    return
-                }
-            }
-            print("Fetch failed: \(error?.localizedDescription ?? "Unknown error")")
-        }.resume()
+    func loadFavMoviesFormObs() {
+        self.favResults = favMoviesList.movies
     }
+    
+    //    func loadFavMovies() {
+    //        guard let url = URL(string: "https://flask-movie-app.herokuapp.com/favorites") else {
+    //            print("Invalid URL")
+    //            return
+    //        }
+    //
+    //        let request = URLRequest(url: url)
+    //        URLSession.shared.dataTask(with: request) { (data, response, error) in
+    //            if let data = data {
+    //                if let decodedResponse = try? JSONDecoder().decode(FavMovies.self, from: data) {
+    //                    DispatchQueue.main.async {
+    //                        self.favResults = decodedResponse.movies
+    //                    }
+    //                    return
+    //                }
+    //            }
+    //            print("Fetch failed: \(error?.localizedDescription ?? "Unknown error")")
+    //        }.resume()
+    //    }
     
     var body: some View {
         NavigationView {
@@ -149,7 +154,7 @@ struct ContentView: View {
                     .padding(.vertical)
                 }
                 .sheet(isPresented: $showDetailView, content: {
-                    DetailView(imdbId: $selectedMovie.imdbID, movieTitle: $selectedMovie.Title, isFav: $selectedMovie.isFav)
+                    DetailView(imdbId: $selectedMovie.imdbID, movieTitle: $selectedMovie.Title, isFav: $selectedMovie.isFav, favMoviesObservable: self.favMoviesList)
                 })
                 .tabItem {
                     Image(systemName: "list.dash")
@@ -188,7 +193,7 @@ struct ContentView: View {
                     Text("Favorits")
                 }
                 .onAppear(perform: {
-                    loadFavMovies()
+                    loadFavMoviesFormObs()
                 })
             }
             .navigationBarTitle("MovieList")
@@ -267,6 +272,7 @@ struct DetailView: View {
     @Binding var imdbId: String
     @Binding var movieTitle: String
     @Binding var isFav: Bool?
+    @ObservedObject var favMoviesObservable: FavMoviesObservable
     
     func loadMovieDetail() {
         let movieDetailsURL = "https://flask-movie-app.herokuapp.com/movie/\(imdbId)"
@@ -293,39 +299,52 @@ struct DetailView: View {
         }.resume()
     }
     
-    func addToFavorites(movie: Movie) {
-        guard let encoded = try? JSONEncoder().encode(movie) else {
-            print("Unable to encode movie data")
-            return
-        }
-        
-        let url = URL(string: "https://flask-movie-app.herokuapp.com/movie")!
-        
-        var request = URLRequest(url: url)
-        
-        //        let body: [String: String] = ["Title": movie.Title, "Poster": movie.Poster, "imdbID": movie.imdbID, "Year": movie.Year]
-        //
-        //        let finalBody = try! JSONSerialization.data(withJSONObject: body)
-        
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpMethod = "POST"
-        
-        // request.httpBody = finalBody
-        request.httpBody = encoded
-        
-        URLSession.shared.dataTask(with: request) { (data, response, error) in
-            if let data = data {
-                if let decodedData = try? JSONDecoder().decode(Movie.self, from: data) {
-                    print("Successfully added to fav list!!")
-                    return
-                } else {
-                    print("Invalid response from server")
-                    return
-                }
-            }
-            print("Error => \(error?.localizedDescription ?? "Unknown error")")
-        }.resume()
+    func saveAsFavMovies(movie: Movie) {
+        favMoviesObservable.movies.append(movie)
+        favMoviesObservable.save()
     }
+    
+    func deleteFromSavedMovies(imdbID: String) {
+        let filteredList = favMoviesObservable.movies.filter { (movie) -> Bool in
+            return movie.imdbID != imdbID
+        }
+        favMoviesObservable.movies = filteredList
+        favMoviesObservable.save()
+    }
+    
+    //    func addToFavorites(movie: Movie) {
+    //        guard let encoded = try? JSONEncoder().encode(movie) else {
+    //            print("Unable to encode movie data")
+    //            return
+    //        }
+    //
+    //                let url = URL(string: "https://flask-movie-app.herokuapp.com/movie")!
+    //
+    //        var request = URLRequest(url: url)
+    //
+    //        //        let body: [String: String] = ["Title": movie.Title, "Poster": movie.Poster, "imdbID": movie.imdbID, "Year": movie.Year]
+    //        //
+    //        //        let finalBody = try! JSONSerialization.data(withJSONObject: body)
+    //
+    //        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    //        request.httpMethod = "POST"
+    //
+    //        // request.httpBody = finalBody
+    //        request.httpBody = encoded
+    //
+    //        URLSession.shared.dataTask(with: request) { (data, response, error) in
+    //            if let data = data {
+    //                if let decodedData = try? JSONDecoder().decode(Movie.self, from: data) {
+    //                    print("Successfully added to fav list!!")
+    //                    return
+    //                } else {
+    //                    print("Invalid response from server")
+    //                    return
+    //                }
+    //            }
+    //            print("Error => \(error?.localizedDescription ?? "Unknown error")")
+    //        }.resume()
+    //    }
     
     var body: some View {
         
@@ -356,9 +375,10 @@ struct DetailView: View {
                                     Button(action: {
                                         if let _ = isFav {
                                             // remove from fav
+                                            deleteFromSavedMovies(imdbID: movieDetailsData.imdbID)
                                         } else {
-                                            let movieData = Movie(Title: movieDetailsData.Title, Year: movieDetailsData.Year, imdbID: movieDetailsData.imdbID, Poster: movieDetailsData.Poster, isFav: false)
-                                            addToFavorites(movie: movieData)
+                                            let movieData = Movie(Title: movieDetailsData.Title, Year: movieDetailsData.Year, imdbID: movieDetailsData.imdbID, Poster: movieDetailsData.Poster, isFav: true)
+                                            saveAsFavMovies(movie: movieData)
                                         }
                                     }, label: {
                                         Image(systemName: isFav ?? false ? "minus.circle" : "plus.circle")
@@ -383,6 +403,52 @@ struct DetailView: View {
                 self.isLoading = true
                 self.loadMovieDetail()
             })
+        }
+    }
+}
+
+class FavMoviesObservable: ObservableObject {
+    @Published var movies: [Movie]
+    static let savedKey = "FavMoviesList"
+    
+    init() {
+        let path = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        let filePath = path[0].appendingPathComponent(Self.savedKey)
+        do {
+            let data = try Data(contentsOf: filePath)
+            let decodedData = try JSONDecoder().decode([Movie].self, from: data)
+            self.movies = decodedData
+            return
+        } catch  {
+            print("Unable to decode fav movies data \(error.localizedDescription)")
+        }
+        
+        self.movies = []
+    }
+    
+    func getPath() -> URL {
+        let path = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        return path[0]
+    }
+    
+    func load() {
+        let filePath = getPath().appendingPathComponent(Self.savedKey)
+        do {
+            let data = try Data(contentsOf: filePath)
+            let decodedData = try JSONDecoder().decode([Movie].self, from: data)
+            self.movies = decodedData
+        } catch  {
+            print("Unable to decode the fav movie data \(error.localizedDescription)")
+        }
+    }
+    
+    func save() {
+        let filePath = getPath().appendingPathComponent(Self.savedKey)
+        do {
+            let data = try JSONEncoder().encode(movies)
+            try data.write(to: filePath, options: [.atomicWrite, .completeFileProtection])
+        } catch  {
+            print("Unable to encode fav movies \(error.localizedDescription)")
         }
     }
 }
