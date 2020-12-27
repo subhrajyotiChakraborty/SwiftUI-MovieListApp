@@ -15,7 +15,6 @@ struct ContentView: View {
     
     @State private var searchText: String = ""
     @State private var results = [Movie]()
-    @State private var favResults = [Movie]()
     @State private var isEditing = false
     @State private var showDetailView = false
     @State private var selectedMovie = Movie(Title: "", Year: "", imdbID: "", Poster: "", isFav: false)
@@ -53,30 +52,6 @@ struct ContentView: View {
             print("Fetch failed: \(error?.localizedDescription ?? "Unknown error")")
         }.resume()
     }
-    
-    func loadFavMoviesFormObs() {
-        self.favResults = favMoviesList.movies
-    }
-    
-    //    func loadFavMovies() {
-    //        guard let url = URL(string: "https://flask-movie-app.herokuapp.com/favorites") else {
-    //            print("Invalid URL")
-    //            return
-    //        }
-    //
-    //        let request = URLRequest(url: url)
-    //        URLSession.shared.dataTask(with: request) { (data, response, error) in
-    //            if let data = data {
-    //                if let decodedResponse = try? JSONDecoder().decode(FavMovies.self, from: data) {
-    //                    DispatchQueue.main.async {
-    //                        self.favResults = decodedResponse.movies
-    //                    }
-    //                    return
-    //                }
-    //            }
-    //            print("Fetch failed: \(error?.localizedDescription ?? "Unknown error")")
-    //        }.resume()
-    //    }
     
     var body: some View {
         NavigationView {
@@ -170,7 +145,7 @@ struct ContentView: View {
                 
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 20) {
-                        ForEach(favResults, id: \.imdbID) {movie in
+                        ForEach(favMoviesList.movies, id: \.imdbID) {movie in
                             Button(action: {
                                 self.selectedMovie = movie
                                 self.showDetailView = true
@@ -192,9 +167,6 @@ struct ContentView: View {
                     Image(systemName: "heart.fill")
                     Text("Favorits")
                 }
-                .onAppear(perform: {
-                    loadFavMoviesFormObs()
-                })
             }
             .navigationBarTitle("MovieList")
         }
@@ -299,9 +271,24 @@ struct DetailView: View {
         }.resume()
     }
     
+    func createMovieData() -> Movie {
+        let movieData = Movie(Title: movieDetailsData.Title, Year: movieDetailsData.Year, imdbID: movieDetailsData.imdbID, Poster: movieDetailsData.Poster, isFav: true)
+        return movieData
+    }
+    
     func saveAsFavMovies(movie: Movie) {
+        let index = favMoviesObservable.movies.firstIndex { (movieI) -> Bool in
+            movie.imdbID == movieI.imdbID
+        }
+        if index != nil {
+            return
+        }
+        isFav = false
         favMoviesObservable.movies.append(movie)
         favMoviesObservable.save()
+        isFav?.toggle()
+        
+        print("Total fav count add =>", favMoviesObservable.movies.count)
     }
     
     func deleteFromSavedMovies(imdbID: String) {
@@ -310,6 +297,9 @@ struct DetailView: View {
         }
         favMoviesObservable.movies = filteredList
         favMoviesObservable.save()
+        isFav?.toggle()
+        
+        print("Total fav count delete =>", favMoviesObservable.movies.count)
     }
     
     //    func addToFavorites(movie: Movie) {
@@ -373,12 +363,11 @@ struct DetailView: View {
                                 }
                                 Section {
                                     Button(action: {
-                                        if let _ = isFav {
-                                            // remove from fav
-                                            deleteFromSavedMovies(imdbID: movieDetailsData.imdbID)
+                                        if let fav = isFav {
+                                            // remove or add from fav
+                                            fav ?  deleteFromSavedMovies(imdbID: movieDetailsData.imdbID) : saveAsFavMovies(movie: createMovieData())
                                         } else {
-                                            let movieData = Movie(Title: movieDetailsData.Title, Year: movieDetailsData.Year, imdbID: movieDetailsData.imdbID, Poster: movieDetailsData.Poster, isFav: true)
-                                            saveAsFavMovies(movie: movieData)
+                                            saveAsFavMovies(movie: createMovieData())
                                         }
                                     }, label: {
                                         Image(systemName: isFav ?? false ? "minus.circle" : "plus.circle")
