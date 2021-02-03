@@ -11,6 +11,7 @@ struct DetailView: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var isLoading = true
     @State private var showAlert = false
+    @State private var showRemoveAlert = false
     @State private var movieDetailsData = MovieDetails(Title: "", Plot: "", Year: "", imdbID: "", Poster: "", Rated: "", Released: "", Runtime: "", Genre: "", Director: "", Writer: "", Actors: "", Language: "", Country: "", Awards: "", Metascore: "", imdbRating: "", imdbVotes: "", Production: "", Website: "")
     @Binding var imdbId: String
     @Binding var movieTitle: String
@@ -81,9 +82,14 @@ struct DetailView: View {
         return movieData.Poster
     }
     
-    func simpleSuccessHaptic() {
+    func successHaptic() {
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)
+    }
+    
+    func warningHaptic() {
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.warning)
     }
     
     //    func addToFavorites(movie: Movie) {
@@ -148,12 +154,21 @@ struct DetailView: View {
                                 Section {
                                     Button(action: {
                                         if let fav = isFav {
-                                            // remove or add from fav
-                                            fav ?  deleteFromSavedMovies(imdbID: movieDetailsData.imdbID) : saveAsFavMovies(movie: createMovieData())
+                                            if fav {
+                                                // remove or add from fav
+                                                showAlert.toggle()
+                                                showRemoveAlert = true
+                                                warningHaptic()
+                                            } else {
+                                                showRemoveAlert = false
+                                                saveAsFavMovies(movie: createMovieData())
+                                                successHaptic()
+                                            }
                                         } else {
+                                            showRemoveAlert = false
                                             saveAsFavMovies(movie: createMovieData())
+                                            successHaptic()
                                         }
-                                        simpleSuccessHaptic()
                                     }, label: {
                                         Image(systemName: isFav ?? false ? "minus.circle" : "plus.circle")
                                         Text(isFav ?? false ? "Remove from favorites" : "Add to favorites")
@@ -174,7 +189,13 @@ struct DetailView: View {
             }))
             .navigationBarTitle(Text(self.movieTitle), displayMode: .inline)
             .alert(isPresented: $showAlert, content: {
-                Alert(title: Text("Movie already present in favorites"))
+                if showRemoveAlert {
+                    return Alert(title: Text("Warning!"), message: Text("Are you sure, want to remove this movie from favorites?"), primaryButton: .destructive(Text("Remove"), action: {
+                        deleteFromSavedMovies(imdbID: movieDetailsData.imdbID)
+                        successHaptic()
+                    }), secondaryButton: .cancel())
+                }
+                return Alert(title: Text("Error!"), message: Text("Movie already present in favorites"), dismissButton: .default(Text("Got it!")))
             })
             .onAppear(perform: {
                 self.isLoading = true
