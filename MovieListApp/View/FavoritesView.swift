@@ -16,6 +16,13 @@ struct FavoritesView: View {
     @State private var selectedMovie = Movie(Title: "", Year: "", imdbID: "", Poster: "", isFav: false)
     @EnvironmentObject var favMoviesList: FavMoviesObservable
     
+    func loadMoviePoster(movieData: Movie) -> String {
+        if movieData.Poster == "N/A" {
+            return "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTChQdlYiED1Ot1XBsYrExnQlEPnuU55oXFXA&usqp=CAU"
+        }
+        return movieData.Poster
+    }
+    
     var body: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 20) {
@@ -25,7 +32,7 @@ struct FavoritesView: View {
                         self.showDetailView = true
                     }, label: {
                         ZStack {
-                            Image(uiImage: movie.Poster.load())
+                            Image(uiImage: loadMoviePoster(movieData: movie).load())
                                 .resizable()
                                 .scaledToFill()
                         }

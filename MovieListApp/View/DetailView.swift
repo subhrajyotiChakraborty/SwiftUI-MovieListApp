@@ -10,6 +10,7 @@ import SwiftUI
 struct DetailView: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var isLoading = true
+    @State private var showAlert = false
     @State private var movieDetailsData = MovieDetails(Title: "", Plot: "", Year: "", imdbID: "", Poster: "", Rated: "", Released: "", Runtime: "", Genre: "", Director: "", Writer: "", Actors: "", Language: "", Country: "", Awards: "", Metascore: "", imdbRating: "", imdbVotes: "", Production: "", Website: "")
     @Binding var imdbId: String
     @Binding var movieTitle: String
@@ -51,6 +52,7 @@ struct DetailView: View {
             movie.imdbID == movieI.imdbID
         }
         if index != nil {
+            showAlert.toggle()
             return
         }
         isFav = false
@@ -70,6 +72,18 @@ struct DetailView: View {
         isFav?.toggle()
         
         print("Total fav count delete =>", favMoviesObservable.movies.count)
+    }
+    
+    func loadMoviePoster(movieData: MovieDetails) -> String {
+        if movieData.Poster == "N/A" {
+            return "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTChQdlYiED1Ot1XBsYrExnQlEPnuU55oXFXA&usqp=CAU"
+        }
+        return movieData.Poster
+    }
+    
+    func simpleSuccessHaptic() {
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
     }
     
     //    func addToFavorites(movie: Movie) {
@@ -117,7 +131,7 @@ struct DetailView: View {
                     } else {
                         VStack(alignment: .leading, spacing: 0) {
                             ZStack {
-                                Image(uiImage: movieDetailsData.Poster.load())
+                                Image(uiImage: loadMoviePoster(movieData: movieDetailsData).load())
                                     .resizable()
                                     .frame(width: fullView.size.width, height: 500)
                                     .scaledToFit()
@@ -139,6 +153,7 @@ struct DetailView: View {
                                         } else {
                                             saveAsFavMovies(movie: createMovieData())
                                         }
+                                        simpleSuccessHaptic()
                                     }, label: {
                                         Image(systemName: isFav ?? false ? "minus.circle" : "plus.circle")
                                         Text(isFav ?? false ? "Remove from favorites" : "Add to favorites")
@@ -158,6 +173,9 @@ struct DetailView: View {
                 Image(systemName: "chevron.left")
             }))
             .navigationBarTitle(Text(self.movieTitle), displayMode: .inline)
+            .alert(isPresented: $showAlert, content: {
+                Alert(title: Text("Movie already present in favorites"))
+            })
             .onAppear(perform: {
                 self.isLoading = true
                 self.loadMovieDetail()

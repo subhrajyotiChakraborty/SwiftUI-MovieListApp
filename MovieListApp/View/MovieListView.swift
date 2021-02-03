@@ -13,6 +13,8 @@ struct MovieListView: View {
         GridItem(.flexible())
     ]
     
+    @State private var pageCount = 1
+    @State private var totalMoviesCount = 0
     @State private var searchText: String = ""
     @State private var results = [Movie]()
     @State private var isEditing = false
@@ -30,7 +32,7 @@ struct MovieListView: View {
         }
         
         var movieURL: String = ""
-        movieURL = "https://flask-movie-app.herokuapp.com/movies/\(movieName.count != 0 ? movieName : "Jurassic")"
+        movieURL = "https://flask-movie-app.herokuapp.com/movies/\(movieName.count != 0 ? movieName : "Jurassic")?page=\(pageCount)"
         movieURL = movieURL.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
         
         guard let url = URL(string: movieURL) else {
@@ -43,7 +45,8 @@ struct MovieListView: View {
             if let data = data {
                 if let decodedResponse = try? JSONDecoder().decode(Movies.self, from: data) {
                     DispatchQueue.main.async {
-                        self.results = decodedResponse.Search
+                        self.totalMoviesCount = Int(decodedResponse.totalResults)!
+                        self.results += decodedResponse.Search
                         self.isInitialViewLoad = true
                     }
                     return
@@ -53,6 +56,18 @@ struct MovieListView: View {
         }.resume()
     }
     
+    func loadMoreMovies() {
+        totalMoviesCount = 0
+        loadData(searchKey: self.searchText, isOnAppear: false)
+    }
+    
+    func loadMoviePoster(movieData: Movie) -> String {
+        if movieData.Poster == "N/A" {
+            return "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTChQdlYiED1Ot1XBsYrExnQlEPnuU55oXFXA&usqp=CAU"
+        }
+        return movieData.Poster
+    }
+    
     var body: some View {
         VStack {
             HStack {
@@ -60,6 +75,9 @@ struct MovieListView: View {
                 TextField("Search ...", text: $searchText) {    isEditing in
                     self.isEditing = isEditing
                 } onCommit: {
+                    pageCount = 1
+                    results = [Movie]()
+                    totalMoviesCount = 0
                     loadData(searchKey: self.searchText, isOnAppear: false)
                 }
                 .padding(7)
@@ -112,7 +130,7 @@ struct MovieListView: View {
                             self.showDetailView = true
                         }, label: {
                             ZStack {
-                                Image(uiImage: movie.Poster.load())
+                                Image(uiImage: loadMoviePoster(movieData: movie).load())
                                     .resizable()
                                     .scaledToFill()
                             }
@@ -123,8 +141,24 @@ struct MovieListView: View {
                     }
                 }
                 .padding(.horizontal)
+                
+                .padding(.vertical)
+                
+                if totalMoviesCount > results.count {
+                    Button(action: {
+                        pageCount += 1
+                        loadMoreMovies()
+                    }, label: {
+                        Text("Load More")
+                            .frame(width: 100, height: 30, alignment: .center)
+                    })
+                    .padding()
+                    .border(Color.blue, width: 1)
+                    .contentShape(Rectangle())
+                }
             }
             .padding(.vertical)
+            
             .sheet(isPresented: $showDetailView, content: {
                 DetailView(imdbId: $selectedMovie.imdbID, movieTitle: $selectedMovie.Title, isFav: $selectedMovie.isFav, favMoviesObservable: self.favMoviesList)
             })

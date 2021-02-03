@@ -40,6 +40,7 @@ struct MovieDetails: Codable {
 
 struct Movies: Codable {
     let Search: [Movie]
+    let totalResults: String
 }
 
 struct FavMovies: Codable {
